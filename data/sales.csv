@@ -1,0 +1,41 @@
+Order Date,Product,Category,Region,Sales,Quantity,Profit,Customer
+2026-01-03,Laptop,Electronics,South,72000,2,12000,Arun Kumar
+2026-01-05,Office Chair,Furniture,South,18000,3,4500,Priya S
+2026-01-08,Wireless Mouse,Electronics,West,2400,8,800,Rahul M
+2026-01-12,Notebook,Stationery,North,1500,15,450,Sneha R
+2026-01-15,Monitor,Electronics,East,36000,4,7200,Vikram P
+2026-01-18,Desk,Furniture,South,28000,2,6000,Meena K
+2026-01-22,Keyboard,Electronics,West,4500,6,1350,Karthik R
+2026-01-27,Printer,Electronics,North,24000,3,4800,Anjali V
+2026-02-02,Headphones,Electronics,South,9000,5,2250,Rohan S
+2026-02-06,Office Chair,Furniture,East,12000,2,3000,Divya N
+2026-02-10,Pen Set,Stationery,West,1800,20,540,Suresh B
+2026-02-14,Laptop,Electronics,North,108000,3,18000,Neha P
+2026-02-19,Desk,Furniture,South,42000,3,9000,Amit J
+2026-02-23,Monitor,Electronics,East,54000,6,10800,Lakshmi T
+2026-02-28,Notebook,Stationery,West,2400,24,720,Hari K
+2026-03-03,Keyboard,Electronics,South,6000,8,1800,Swathi R
+2026-03-07,Printer,Electronics,North,32000,4,6400,Manoj V
+2026-03-11,Office Chair,Furniture,East,24000,4,6000,Pooja M
+2026-03-16,Headphones,Electronics,West,12600,7,3150,Naveen S
+2026-03-21,Desk,Furniture,South,35000,2,7500,Deepa K
+2026-03-26,Laptop,Electronics,East,144000,4,24000,Sanjay P
+2026-03-30,Pen Set,Stationery,North,2250,25,675,Asha R
+2026-04-04,Monitor,Electronics,South,45000,5,9000,Gokul N
+2026-04-09,Notebook,Stationery,West,3000,30,900,Ishita S
+2026-04-13,Wireless Mouse,Electronics,East,3600,12,1200,Varun K
+2026-04-18,Office Chair,Furniture,North,30000,5,7500,Keerthi P
+2026-04-22,Printer,Electronics,South,16000,2,3200,Ajay R
+2026-04-27,Desk,Furniture,West,56000,4,12000,Monika T
+2026-05-02,Laptop,Electronics,North,90000,2,15000,Dinesh M
+2026-05-08,Headphones,Electronics,East,7200,4,1800,Shalini V
+2026-05-12,Keyboard,Electronics,South,7500,10,2250,Vijay S
+2026-05-17,Notebook,Stationery,West,2000,20,600,Nithya R
+2026-05-21,Monitor,Electronics,North,36000,4,7200,Arun K
+2026-05-26,Office Chair,Furniture,East,18000,3,4500,Harish P
+2026-05-30,Printer,Electronics,South,40000,5,8000,Gayathri N
+2026-06-04,Desk,Furniture,West,28000,2,6000,Rakesh V
+2026-06-09,Wireless Mouse,Electronics,North,3000,10,1000,Anu S
+2026-06-14,Laptop,Electronics,East,72000,2,12000,Pranav J
+2026-06-20,Pen Set,Stationery,South,2700,30,810,Bhavya M
+2026-06-25,Headphones,Electronics,West,10800,6,2700,Ravi K

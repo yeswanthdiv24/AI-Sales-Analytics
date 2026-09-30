@@ -1,31 +1,90 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import ollama
 from pathlib import Path
 
 
 # ============================================================
-# CONFIGURATION
+# PAGE CONFIG
 # ============================================================
 
 st.set_page_config(
     page_title="AI Sales Analytics",
-    page_icon="🤖",
+    page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-OLLAMA_MODEL = "qwen3:4b"
+
+# ============================================================
+# CUSTOM CSS
+# ============================================================
+
+st.markdown("""
+<style>
+
+.main {
+    background-color: #0e0f14;
+}
+
+.block-container {
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+}
+
+h1, h2, h3 {
+    font-weight: 700;
+}
+
+.metric-card {
+    background: #171922;
+    padding: 20px;
+    border-radius: 14px;
+    border: 1px solid #292c36;
+    text-align: center;
+}
+
+.metric-title {
+    color: #9ca3af;
+    font-size: 14px;
+}
+
+.metric-value {
+    font-size: 28px;
+    font-weight: 700;
+}
+
+.ai-box {
+    background: #171922;
+    border-left: 5px solid #ff4b4b;
+    padding: 22px;
+    border-radius: 12px;
+    margin-top: 15px;
+}
+
+</style>
+""", unsafe_allow_html=True)
 
 
 # ============================================================
-# PROJECT PATHS
+# FIND CSV
 # ============================================================
 
-PROJECT_DIR = Path(__file__).resolve().parents[1]
+BASE_DIR = Path(__file__).resolve().parent.parent
 
-DATA_PATH = PROJECT_DIR / "data" / "sales.csv"
+possible_files = [
+    BASE_DIR / "data" / "sales.csv",
+    BASE_DIR / "sales.csv",
+    Path("data/sales.csv"),
+    Path("sales.csv")
+]
+
+DATA_FILE = None
+
+for file in possible_files:
+    if file.exists():
+        DATA_FILE = file
+        break
 
 
 # ============================================================
@@ -35,79 +94,82 @@ DATA_PATH = PROJECT_DIR / "data" / "sales.csv"
 @st.cache_data
 def load_data():
 
-    data = pd.read_csv(DATA_PATH)
+    if DATA_FILE is None:
+        return pd.DataFrame()
 
-    if "Order Date" in data.columns:
+    df = pd.read_csv(DATA_FILE)
 
-        data["Order Date"] = pd.to_datetime(
-            data["Order Date"],
-            errors="coerce"
-        )
-
-    return data
-
-
-try:
-
-    df = load_data()
-
-except Exception as e:
-
-    st.error(
-        f"Unable to load sales data: {e}"
+    # Clean column names
+    df.columns = (
+        df.columns
+        .str.strip()
+        .str.lower()
+        .str.replace(" ", "_")
     )
 
-    st.info(
-        f"Expected file:\n{DATA_PATH}"
+    return df
+
+
+df = load_data()
+
+
+# ============================================================
+# ERROR IF DATA NOT FOUND
+# ============================================================
+
+if df.empty:
+
+    st.error(
+        """
+        ❌ Sales dataset not found.
+
+        Please make sure your file exists at:
+
+        `data/sales.csv`
+        """
     )
 
     st.stop()
 
 
 # ============================================================
-# REQUIRED COLUMNS
+# HELPER FUNCTIONS
 # ============================================================
 
-required_columns = [
-    "Region",
-    "Category",
-    "Product",
-    "Sales",
-    "Profit",
-    "Quantity"
-]
+def find_column(possible_names):
+
+    for name in possible_names:
+
+        if name in df.columns:
+            return name
+
+    return None
 
 
-missing_columns = [
-    column
-    for column in required_columns
-    if column not in df.columns
-]
+region_col = find_column([
+    "region",
+    "regions",
+    "sales_region"
+])
 
+category_col = find_column([
+    "category",
+    "product_category",
+    "product"
+])
 
-if missing_columns:
+sales_col = find_column([
+    "sales",
+    "total_sales",
+    "revenue",
+    "amount"
+])
 
-    st.error(
-        "Missing required columns:"
-    )
-
-    st.write(missing_columns)
-
-    st.stop()
-
-
-# ============================================================
-# SESSION STATE
-# ============================================================
-
-if "messages" not in st.session_state:
-
-    st.session_state.messages = []
-
-
-if "last_question" not in st.session_state:
-
-    st.session_state.last_question = ""
+quantity_col = find_column([
+    "quantity",
+    "units",
+    "units_sold"
+])
 
 
 # ============================================================
@@ -116,43 +178,51 @@ if "last_question" not in st.session_state:
 
 st.sidebar.title("🔎 Dashboard Filters")
 
-st.sidebar.caption(
-    "Control the data used by the dashboard and AI agent."
+st.sidebar.write(
+    "Filter the dashboard by region and category."
 )
 
 
-regions = [
-    "All"
-] + sorted(
-    df["Region"]
-    .dropna()
-    .astype(str)
-    .unique()
-    .tolist()
-)
+# Region filter
+if region_col:
+
+    regions = ["All"] + sorted(
+        df[region_col]
+        .dropna()
+        .astype(str)
+        .unique()
+        .tolist()
+    )
+
+    selected_region = st.sidebar.selectbox(
+        "🌎 Select Region",
+        regions
+    )
+
+else:
+
+    selected_region = "All"
 
 
-categories = [
-    "All"
-] + sorted(
-    df["Category"]
-    .dropna()
-    .astype(str)
-    .unique()
-    .tolist()
-)
+# Category filter
+if category_col:
 
+    categories = ["All"] + sorted(
+        df[category_col]
+        .dropna()
+        .astype(str)
+        .unique()
+        .tolist()
+    )
 
-selected_region = st.sidebar.selectbox(
-    "🌎 Select Region",
-    regions
-)
+    selected_category = st.sidebar.selectbox(
+        "📦 Select Category",
+        categories
+    )
 
+else:
 
-selected_category = st.sidebar.selectbox(
-    "📦 Select Category",
-    categories
-)
+    selected_category = "All"
 
 
 # ============================================================
@@ -162,176 +232,105 @@ selected_category = st.sidebar.selectbox(
 filtered_df = df.copy()
 
 
-if selected_region != "All":
+if region_col and selected_region != "All":
 
     filtered_df = filtered_df[
-        filtered_df["Region"].astype(str)
-        == selected_region
+        filtered_df[region_col].astype(str) == selected_region
     ]
 
 
-if selected_category != "All":
+if category_col and selected_category != "All":
 
     filtered_df = filtered_df[
-        filtered_df["Category"].astype(str)
-        == selected_category
+        filtered_df[category_col].astype(str) == selected_category
     ]
 
 
 # ============================================================
-# HELPER FUNCTIONS
+# CONVERT SALES
 # ============================================================
 
-def money(value):
+if sales_col:
 
-    return f"₹{value:,.0f}"
-
-
-def calculate_metrics(data):
-
-    if data.empty:
-
-        return {
-            "sales": 0,
-            "profit": 0,
-            "quantity": 0,
-            "average_order": 0,
-            "margin": 0
-        }
-
-
-    sales = float(
-        data["Sales"].sum()
-    )
-
-    profit = float(
-        data["Profit"].sum()
-    )
-
-    quantity = float(
-        data["Quantity"].sum()
-    )
-
-    average_order = float(
-        data["Sales"].mean()
-    )
-
-    margin = (
-        profit / sales * 100
-        if sales != 0
-        else 0
-    )
-
-
-    return {
-        "sales": sales,
-        "profit": profit,
-        "quantity": quantity,
-        "average_order": average_order,
-        "margin": margin
-    }
-
-
-# ============================================================
-# METRICS
-# ============================================================
-
-metrics = calculate_metrics(
-    filtered_df
-)
-
-
-total_sales = metrics["sales"]
-
-total_profit = metrics["profit"]
-
-total_quantity = metrics["quantity"]
-
-average_order = metrics["average_order"]
-
-profit_margin = metrics["margin"]
+    filtered_df[sales_col] = pd.to_numeric(
+        filtered_df[sales_col],
+        errors="coerce"
+    ).fillna(0)
 
 
 # ============================================================
 # HEADER
 # ============================================================
 
-st.title(
-    "🤖 AI Sales Analytics"
-)
+st.title("📊 AI Sales Analytics")
 
-st.markdown(
-    """
-### Intelligent Business Intelligence Dashboard
-
-Analyze sales, profit, products, categories and regions using
-**Python + Pandas + Plotly + Streamlit + Qwen3 + Ollama**.
-"""
-)
-
-st.info(
-    "🔒 AI processing is powered locally by Qwen3 4B through Ollama."
+st.caption(
+    "Interactive sales dashboard with instant data-driven analysis."
 )
 
 
 # ============================================================
-# CURRENT FILTER
+# KPI SECTION
 # ============================================================
 
-filter_text = (
-    f"Region: **{selected_region}**  |  "
-    f"Category: **{selected_category}**"
+total_sales = (
+    filtered_df[sales_col].sum()
+    if sales_col
+    else 0
 )
 
-st.markdown(
-    f"### Current Analysis\n{filter_text}"
+total_records = len(filtered_df)
+
+average_sales = (
+    filtered_df[sales_col].mean()
+    if sales_col and total_records > 0
+    else 0
 )
 
+if quantity_col:
 
-# ============================================================
-# KPI CARDS
-# ============================================================
+    total_quantity = pd.to_numeric(
+        filtered_df[quantity_col],
+        errors="coerce"
+    ).fillna(0).sum()
 
-col1, col2, col3, col4, col5 = st.columns(5)
+else:
+
+    total_quantity = 0
+
+
+col1, col2, col3, col4 = st.columns(4)
 
 
 with col1:
 
     st.metric(
         "💰 Total Sales",
-        money(total_sales)
+        f"₹{total_sales:,.0f}"
     )
 
 
 with col2:
 
     st.metric(
-        "📈 Total Profit",
-        money(total_profit)
+        "📦 Records",
+        f"{total_records:,}"
     )
 
 
 with col3:
 
     st.metric(
-        "📦 Units Sold",
-        f"{total_quantity:,.0f}"
+        "📈 Average Sale",
+        f"₹{average_sales:,.0f}"
     )
 
 
 with col4:
 
     st.metric(
-        "🧾 Average Order",
-        money(average_order)
-    )
-
-
-with col5:
-
-    st.metric(
-        "📊 Profit Margin",
-        f"{profit_margin:.2f}%"
+        "🛒 Units Sold",
+        f"{total_quantity:,.0f}"
     )
 
 
@@ -339,1117 +338,250 @@ st.divider()
 
 
 # ============================================================
-# DASHBOARD TABS
+# AI SALES ANALYSIS
 # ============================================================
 
-dashboard_tab, ai_tab, data_tab = st.tabs(
-    [
-        "📊 Dashboard",
-        "🤖 AI Sales Agent",
-        "📄 Sales Data"
-    ]
-)
+st.subheader("🤖 AI Sales Analysis")
 
 
-# ============================================================
-# DASHBOARD TAB
-# ============================================================
+def generate_analysis(data):
 
-with dashboard_tab:
+    if data.empty:
 
-    st.header(
-        "📊 Sales Dashboard"
+        return "No data available for analysis."
+
+
+    analysis = []
+
+    # -----------------------------------------
+    # Total sales
+    # -----------------------------------------
+
+    if sales_col:
+
+        total = data[sales_col].sum()
+
+        analysis.append(
+            f"### 💰 Sales Summary\n"
+            f"The selected dataset contains **₹{total:,.0f}** in total sales."
+        )
+
+
+    # -----------------------------------------
+    # Best region
+    # -----------------------------------------
+
+    if region_col and sales_col:
+
+        region_sales = (
+            data.groupby(region_col)[sales_col]
+            .sum()
+            .sort_values(ascending=False)
+        )
+
+        if not region_sales.empty:
+
+            best_region = region_sales.index[0]
+            best_value = region_sales.iloc[0]
+
+            analysis.append(
+                f"### 🌎 Regional Performance\n"
+                f"The highest sales region is **{best_region}** "
+                f"with sales of **₹{best_value:,.0f}**."
+            )
+
+
+    # -----------------------------------------
+    # Best category
+    # -----------------------------------------
+
+    if category_col and sales_col:
+
+        category_sales = (
+            data.groupby(category_col)[sales_col]
+            .sum()
+            .sort_values(ascending=False)
+        )
+
+        if not category_sales.empty:
+
+            best_category = category_sales.index[0]
+            best_category_value = category_sales.iloc[0]
+
+            analysis.append(
+                f"### 📦 Category Performance\n"
+                f"The highest-performing category is "
+                f"**{best_category}** with sales of "
+                f"**₹{best_category_value:,.0f}**."
+            )
+
+
+    # -----------------------------------------
+    # Average
+    # -----------------------------------------
+
+    if sales_col:
+
+        average = data[sales_col].mean()
+
+        analysis.append(
+            f"### 📊 Average Transaction\n"
+            f"The average sales value is **₹{average:,.0f}**."
+        )
+
+
+    # -----------------------------------------
+    # Recommendation
+    # -----------------------------------------
+
+    analysis.append(
+        """
+### 💡 Business Insight
+
+Focus on the strongest-performing region and category,
+while monitoring lower-performing segments for opportunities
+to improve sales performance.
+"""
     )
 
 
-    # --------------------------------------------------------
-    # MONTHLY SALES
-    # --------------------------------------------------------
-
-    if (
-        not filtered_df.empty
-        and "Order Date" in filtered_df.columns
-    ):
-
-        monthly_data = (
-            filtered_df
-            .dropna(
-                subset=["Order Date"]
-            )
-            .assign(
-                Month=lambda x:
-                x["Order Date"]
-                .dt.to_period("M")
-                .astype(str)
-            )
-            .groupby(
-                "Month",
-                as_index=False
-            )
-            .agg(
-                Sales=("Sales", "sum"),
-                Profit=("Profit", "sum")
-            )
-        )
-
-    else:
-
-        monthly_data = pd.DataFrame(
-            columns=[
-                "Month",
-                "Sales",
-                "Profit"
-            ]
-        )
+    return "\n\n".join(analysis)
 
 
-    # --------------------------------------------------------
-    # CATEGORY DATA
-    # --------------------------------------------------------
+if st.button(
+    "🤖 Analyze Sales",
+    type="primary",
+    use_container_width=False
+):
 
-    category_data = (
-        filtered_df
-        .groupby(
-            "Category",
-            as_index=False
-        )
-        .agg(
-            Sales=("Sales", "sum"),
-            Profit=("Profit", "sum"),
-            Quantity=("Quantity", "sum")
-        )
+    with st.spinner("Analyzing sales data..."):
+
+        result = generate_analysis(filtered_df)
+
+    st.markdown(
+        f"""
+        <div class="ai-box">
+        {result}
+        </div>
+        """,
+        unsafe_allow_html=True
     )
 
 
-    # --------------------------------------------------------
-    # REGION DATA
-    # --------------------------------------------------------
+# ============================================================
+# EXAMPLE QUESTIONS
+# ============================================================
+
+with st.expander("💡 Example Questions"):
+
+    st.markdown("""
+    You can use this dashboard to answer questions such as:
+
+    - Which region has the highest sales?
+    - Which category performs best?
+    - What is the total sales?
+    - What is the average sales value?
+    - Which region needs improvement?
+    - Which category generates the most revenue?
+    """)
+
+
+# ============================================================
+# CHART 1 - REGIONAL SALES
+# ============================================================
+
+if region_col and sales_col:
+
+    st.subheader("🌎 Regional Sales")
 
     region_data = (
         filtered_df
-        .groupby(
-            "Region",
-            as_index=False
-        )
-        .agg(
-            Sales=("Sales", "sum"),
-            Profit=("Profit", "sum"),
-            Quantity=("Quantity", "sum")
-        )
+        .groupby(region_col)[sales_col]
+        .sum()
+        .reset_index()
+        .sort_values(sales_col, ascending=False)
     )
 
-
-    # --------------------------------------------------------
-    # PRODUCT DATA
-    # --------------------------------------------------------
-
-    product_data = (
-        filtered_df
-        .groupby(
-            "Product",
-            as_index=False
-        )
-        .agg(
-            Sales=("Sales", "sum"),
-            Profit=("Profit", "sum"),
-            Quantity=("Quantity", "sum")
-        )
-        .sort_values(
-            "Sales",
-            ascending=False
-        )
+    fig_region = px.bar(
+        region_data,
+        x=region_col,
+        y=sales_col,
+        title="Sales by Region",
+        text_auto=".2s"
     )
 
-
-    # --------------------------------------------------------
-    # ROW 1
-    # --------------------------------------------------------
-
-    col1, col2 = st.columns(2)
-
-
-    with col1:
-
-        fig_month = px.line(
-            monthly_data,
-            x="Month",
-            y="Sales",
-            markers=True,
-            title="📈 Monthly Sales"
-        )
-
-        fig_month.update_layout(
-            xaxis_title="Month",
-            yaxis_title="Sales"
-        )
-
-        st.plotly_chart(
-            fig_month,
-            use_container_width=True
-        )
-
-
-    with col2:
-
-        fig_category = px.bar(
-            category_data,
-            x="Category",
-            y="Sales",
-            text_auto=True,
-            title="📦 Sales by Category"
-        )
-
-        fig_category.update_layout(
-            xaxis_title="Category",
-            yaxis_title="Sales"
-        )
-
-        st.plotly_chart(
-            fig_category,
-            use_container_width=True
-        )
-
-
-    # --------------------------------------------------------
-    # ROW 2
-    # --------------------------------------------------------
-
-    col1, col2 = st.columns(2)
-
-
-    with col1:
-
-        fig_region = px.bar(
-            region_data,
-            x="Region",
-            y="Sales",
-            text_auto=True,
-            title="🌎 Sales by Region"
-        )
-
-        fig_region.update_layout(
-            xaxis_title="Region",
-            yaxis_title="Sales"
-        )
-
-        st.plotly_chart(
-            fig_region,
-            use_container_width=True
-        )
-
-
-    with col2:
-
-        top10 = product_data.head(10)
-
-        fig_products = px.bar(
-            top10.sort_values("Sales"),
-            x="Sales",
-            y="Product",
-            orientation="h",
-            text_auto=True,
-            title="🏆 Top 10 Products"
-        )
-
-        fig_products.update_layout(
-            xaxis_title="Sales",
-            yaxis_title="Product"
-        )
-
-        st.plotly_chart(
-            fig_products,
-            use_container_width=True
-        )
-
-
-    # --------------------------------------------------------
-    # PROFIT BY CATEGORY
-    # --------------------------------------------------------
-
-    st.subheader(
-        "💰 Profit by Category"
-    )
-
-
-    fig_profit = px.bar(
-        category_data,
-        x="Category",
-        y="Profit",
-        text_auto=True,
-        title="Profit Performance"
+    fig_region.update_layout(
+        xaxis_title="Region",
+        yaxis_title="Sales (₹)",
+        template="plotly_dark"
     )
 
     st.plotly_chart(
-        fig_profit,
+        fig_region,
         use_container_width=True
     )
 
 
-    # --------------------------------------------------------
-    # BUSINESS INSIGHTS
-    # --------------------------------------------------------
+# ============================================================
+# CHART 2 - CATEGORY SALES
+# ============================================================
 
-    st.subheader(
-        "💡 Automatic Business Insights"
+if category_col and sales_col:
+
+    st.subheader("📦 Category Sales")
+
+    category_data = (
+        filtered_df
+        .groupby(category_col)[sales_col]
+        .sum()
+        .reset_index()
+        .sort_values(sales_col, ascending=False)
     )
 
+    fig_category = px.pie(
+        category_data,
+        names=category_col,
+        values=sales_col,
+        title="Sales Distribution by Category",
+        hole=0.4
+    )
 
-    if not filtered_df.empty:
+    fig_category.update_layout(
+        template="plotly_dark"
+    )
 
-        best_region = (
-            region_data
-            .sort_values(
-                "Sales",
-                ascending=False
-            )
-            .iloc[0]
-        )
-
-
-        best_category = (
-            category_data
-            .sort_values(
-                "Sales",
-                ascending=False
-            )
-            .iloc[0]
-        )
-
-
-        best_product = (
-            product_data
-            .iloc[0]
-        )
-
-
-        best_profit_category = (
-            category_data
-            .sort_values(
-                "Profit",
-                ascending=False
-            )
-            .iloc[0]
-        )
-
-
-        insight1, insight2 = st.columns(2)
-
-
-        with insight1:
-
-            st.success(
-                f"""
-**🌎 Top Region**
-
-{best_region["Region"]}
-
-Sales: {money(best_region["Sales"])}
-
-Profit: {money(best_region["Profit"])}
-"""
-            )
-
-
-        with insight2:
-
-            st.success(
-                f"""
-**📦 Top Category**
-
-{best_category["Category"]}
-
-Sales: {money(best_category["Sales"])}
-
-Profit: {money(best_category["Profit"])}
-"""
-            )
-
-
-        insight3, insight4 = st.columns(2)
-
-
-        with insight3:
-
-            st.info(
-                f"""
-**🏆 Top Product**
-
-{best_product["Product"]}
-
-Sales: {money(best_product["Sales"])}
-
-Quantity: {best_product["Quantity"]:,.0f}
-"""
-            )
-
-
-        with insight4:
-
-            st.info(
-                f"""
-**💰 Highest Profit Category**
-
-{best_profit_category["Category"]}
-
-Profit: {money(best_profit_category["Profit"])}
-"""
-            )
+    st.plotly_chart(
+        fig_category,
+        use_container_width=True
+    )
 
 
 # ============================================================
-# AI CONTEXT
+# SALES DATA
 # ============================================================
 
-def build_ai_context(data):
+st.subheader("📄 Sales Data")
 
-    if data.empty:
-
-        return (
-            "No sales data is available for the "
-            "current dashboard filters."
-        )
-
-
-    m = calculate_metrics(data)
-
-
-    # --------------------------------------------------------
-    # REGION
-    # --------------------------------------------------------
-
-    region_summary = (
-        data
-        .groupby("Region")
-        .agg(
-            Sales=("Sales", "sum"),
-            Profit=("Profit", "sum"),
-            Quantity=("Quantity", "sum")
-        )
-        .sort_values(
-            "Sales",
-            ascending=False
-        )
-    )
-
-
-    # --------------------------------------------------------
-    # CATEGORY
-    # --------------------------------------------------------
-
-    category_summary = (
-        data
-        .groupby("Category")
-        .agg(
-            Sales=("Sales", "sum"),
-            Profit=("Profit", "sum"),
-            Quantity=("Quantity", "sum")
-        )
-        .sort_values(
-            "Sales",
-            ascending=False
-        )
-    )
-
-
-    # --------------------------------------------------------
-    # PRODUCT
-    # --------------------------------------------------------
-
-    product_summary = (
-        data
-        .groupby("Product")
-        .agg(
-            Sales=("Sales", "sum"),
-            Profit=("Profit", "sum"),
-            Quantity=("Quantity", "sum")
-        )
-        .sort_values(
-            "Sales",
-            ascending=False
-        )
-        .head(20)
-    )
-
-
-    # --------------------------------------------------------
-    # MONTH
-    # --------------------------------------------------------
-
-    if "Order Date" in data.columns:
-
-        monthly_summary = (
-            data
-            .dropna(
-                subset=["Order Date"]
-            )
-            .assign(
-                Month=lambda x:
-                x["Order Date"]
-                .dt.to_period("M")
-                .astype(str)
-            )
-            .groupby("Month")
-            .agg(
-                Sales=("Sales", "sum"),
-                Profit=("Profit", "sum")
-            )
-            .sort_index()
-        )
-
-    else:
-
-        monthly_summary = pd.DataFrame()
-
-
-    # --------------------------------------------------------
-    # CONTEXT
-    # --------------------------------------------------------
-
-    context = f"""
-VERIFIED SALES DATA
-===================
-
-CURRENT FILTERS
----------------
-Region: {selected_region}
-Category: {selected_category}
-
-
-OVERALL METRICS
----------------
-Total Sales: ₹{m["sales"]:,.0f}
-Total Profit: ₹{m["profit"]:,.0f}
-Total Quantity: {m["quantity"]:,.0f}
-Average Order Value: ₹{m["average_order"]:,.0f}
-Profit Margin: {m["margin"]:.2f}%
-
-
-REGION PERFORMANCE
-------------------
-{region_summary.to_string()}
-
-
-CATEGORY PERFORMANCE
---------------------
-{category_summary.to_string()}
-
-
-TOP PRODUCTS
-------------
-{product_summary.to_string()}
-
-
-MONTHLY PERFORMANCE
--------------------
-{monthly_summary.to_string()}
-
-
-END VERIFIED DATA
-=================
-"""
-
-    return context
-
-
-# ============================================================
-# QWEN AGENT
-# ============================================================
-
-def ask_qwen(question, data):
-
-    context = build_ai_context(
-        data
-    )
-
-
-    # Previous conversation
-    history_text = ""
-
-
-    for message in st.session_state.messages[-6:]:
-
-        role = message["role"]
-
-        content = message["content"]
-
-        history_text += (
-            f"\n{role.upper()}: {content}\n"
-        )
-
-
-    prompt = f"""
-You are a professional AI Business Intelligence Agent.
-
-You are connected to a sales analytics dashboard.
-
-The Python application has already calculated the
-numerical values from the company's sales CSV.
-
-Your job is to analyze and explain the verified data.
-
-IMPORTANT RULES:
-
-1. Use ONLY the verified sales data.
-2. Never invent numbers.
-3. Never invent products.
-4. Never invent categories.
-5. Never invent regions.
-6. Do not use external data.
-7. Use Indian Rupees for monetary values.
-8. When comparing values, show actual values.
-9. You may calculate ratios and percentages from supplied values.
-10. Keep answers professional.
-11. Use headings and bullet points when helpful.
-12. Give clear business insights.
-13. Recommendations must be based only on the supplied data.
-14. Respect the selected dashboard filters.
-15. Do not claim external research.
-16. If data is insufficient, say so.
-17. Do not create forecasts unless specifically requested.
-18. If the user asks something unrelated to sales analytics,
-    explain that you are a sales analytics assistant.
-19. Do not repeat the entire dataset unnecessarily.
-20. Answer the specific question first.
-
-CURRENT DASHBOARD DATA:
-
-{context}
-
-
-RECENT CONVERSATION:
-
-{history_text}
-
-
-USER QUESTION:
-
-{question}
-
-
-Provide a concise but useful business analysis.
-"""
-
-
-    try:
-
-        response = ollama.chat(
-            model=OLLAMA_MODEL,
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ]
-        )
-
-
-        return response[
-            "message"
-        ][
-            "content"
-        ]
-
-
-    except Exception as e:
-
-        return (
-            "### ❌ Ollama Error\n\n"
-            f"`{str(e)}`\n\n"
-            "Check Ollama with:\n\n"
-            "`ollama list`\n\n"
-            "and make sure `qwen3:4b` is installed."
-        )
-
-
-# ============================================================
-# AUTOMATIC CHART FROM QUESTION
-# ============================================================
-
-def show_question_chart(question, data):
-
-    if data.empty:
-
-        return
-
-
-    q = question.lower()
-
-
-    # --------------------------------------------------------
-    # REGION
-    # --------------------------------------------------------
-
-    if (
-        "region" in q
-        or "east" in q
-        or "west" in q
-        or "north" in q
-        or "south" in q
-    ):
-
-        chart_data = (
-            data
-            .groupby(
-                "Region",
-                as_index=False
-            )
-            .agg(
-                Sales=("Sales", "sum"),
-                Profit=("Profit", "sum")
-            )
-        )
-
-
-        fig = px.bar(
-            chart_data,
-            x="Region",
-            y="Sales",
-            text_auto=True,
-            title="🌎 Regional Sales Comparison"
-        )
-
-
-        st.plotly_chart(
-            fig,
-            use_container_width=True
-        )
-
-
-        return
-
-
-    # --------------------------------------------------------
-    # CATEGORY
-    # --------------------------------------------------------
-
-    if "categor" in q:
-
-        chart_data = (
-            data
-            .groupby(
-                "Category",
-                as_index=False
-            )
-            .agg(
-                Sales=("Sales", "sum"),
-                Profit=("Profit", "sum")
-            )
-        )
-
-
-        fig = px.bar(
-            chart_data,
-            x="Category",
-            y="Sales",
-            text_auto=True,
-            title="📦 Category Sales Comparison"
-        )
-
-
-        st.plotly_chart(
-            fig,
-            use_container_width=True
-        )
-
-
-        return
-
-
-    # --------------------------------------------------------
-    # PRODUCT
-    # --------------------------------------------------------
-
-    if "product" in q:
-
-        chart_data = (
-            data
-            .groupby(
-                "Product",
-                as_index=False
-            )
-            .agg(
-                Sales=("Sales", "sum"),
-                Profit=("Profit", "sum")
-            )
-            .sort_values(
-                "Sales",
-                ascending=False
-            )
-            .head(10)
-        )
-
-
-        fig = px.bar(
-            chart_data.sort_values(
-                "Sales"
-            ),
-            x="Sales",
-            y="Product",
-            orientation="h",
-            text_auto=True,
-            title="🏆 Top Products"
-        )
-
-
-        st.plotly_chart(
-            fig,
-            use_container_width=True
-        )
-
-
-        return
-
-
-    # --------------------------------------------------------
-    # MONTH / TREND
-    # --------------------------------------------------------
-
-    if (
-        "month" in q
-        or "trend" in q
-        or "time" in q
-        or "monthly" in q
-    ):
-
-        if "Order Date" not in data.columns:
-
-            return
-
-
-        chart_data = (
-            data
-            .dropna(
-                subset=["Order Date"]
-            )
-            .assign(
-                Month=lambda x:
-                x["Order Date"]
-                .dt.to_period("M")
-                .astype(str)
-            )
-            .groupby(
-                "Month",
-                as_index=False
-            )
-            .agg(
-                Sales=("Sales", "sum"),
-                Profit=("Profit", "sum")
-            )
-        )
-
-
-        fig = px.line(
-            chart_data,
-            x="Month",
-            y="Sales",
-            markers=True,
-            title="📈 Monthly Sales Trend"
-        )
-
-
-        st.plotly_chart(
-            fig,
-            use_container_width=True
-        )
-
-
-# ============================================================
-# AI TAB
-# ============================================================
-
-with ai_tab:
-
-    st.header(
-        "🤖 AI Sales Agent"
-    )
-
-
-    st.markdown(
-        f"""
-**Model:** `{OLLAMA_MODEL}`
-
-**Engine:** Ollama
-
-**Data source:** `sales.csv`
-
-**Current filter:** {selected_region} / {selected_category}
-"""
-    )
-
-
-    # --------------------------------------------------------
-    # QUICK QUESTIONS
-    # --------------------------------------------------------
-
-    st.subheader(
-        "⚡ Quick Questions"
-    )
-
-
-    quick1, quick2, quick3, quick4 = st.columns(4)
-
-
-    quick_question = None
-
-
-    with quick1:
-
-        if st.button(
-            "💰 Total Performance",
-            use_container_width=True
-        ):
-
-            quick_question = (
-                "Give me the total sales, total profit, "
-                "quantity sold, average order value and "
-                "profit margin."
-            )
-
-
-    with quick2:
-
-        if st.button(
-            "🌎 Region Analysis",
-            use_container_width=True
-        ):
-
-            quick_question = (
-                "Compare all regions by sales and profit."
-            )
-
-
-    with quick3:
-
-        if st.button(
-            "📦 Category Analysis",
-            use_container_width=True
-        ):
-
-            quick_question = (
-                "Compare all categories by sales and profit "
-                "and identify the highest performing category."
-            )
-
-
-    with quick4:
-
-        if st.button(
-            "💡 Business Summary",
-            use_container_width=True
-        ):
-
-            quick_question = (
-                "Give me a complete business summary with "
-                "the most important sales and profit insights."
-            )
-
-
-    st.divider()
-
-
-    # --------------------------------------------------------
-    # DISPLAY CHAT HISTORY
-    # --------------------------------------------------------
-
-    for message in st.session_state.messages:
-
-        with st.chat_message(
-            message["role"]
-        ):
-
-            st.markdown(
-                message["content"]
-            )
-
-
-    # --------------------------------------------------------
-    # CHAT INPUT
-    # --------------------------------------------------------
-
-    user_question = st.chat_input(
-        "Ask your sales question..."
-    )
-
-
-    if quick_question:
-
-        user_question = quick_question
-
-
-    # --------------------------------------------------------
-    # PROCESS QUESTION
-    # --------------------------------------------------------
-
-    if user_question:
-
-        st.session_state.last_question = (
-            user_question
-        )
-
-
-        # User message
-        st.session_state.messages.append(
-            {
-                "role": "user",
-                "content": user_question
-            }
-        )
-
-
-        with st.chat_message("user"):
-
-            st.markdown(
-                user_question
-            )
-
-
-        # AI response
-        with st.chat_message("assistant"):
-
-            with st.spinner(
-                "🤖 Qwen3 is analyzing your sales data..."
-            ):
-
-                answer = ask_qwen(
-                    user_question,
-                    filtered_df
-                )
-
-
-            st.markdown(
-                answer
-            )
-
-
-            # Automatic chart
-            show_question_chart(
-                user_question,
-                filtered_df
-            )
-
-
-        st.session_state.messages.append(
-            {
-                "role": "assistant",
-                "content": answer
-            }
-        )
-
-
-    # --------------------------------------------------------
-    # EXAMPLE QUESTIONS
-    # --------------------------------------------------------
-
-    with st.expander(
-        "💡 Example Questions"
-    ):
-
-        st.markdown(
-            """
-### General
-
-- What are the total sales?
-- What is the total profit?
-- What is the profit margin?
-- How many units were sold?
-- What is the average order value?
-
-### Regions
-
-- Which region has the highest sales?
-- Which region has the highest profit?
-- Compare East vs West sales and profit.
-- Compare all regions.
-
-### Categories
-
-- Which category has the highest sales?
-- Which category has the highest profit?
-- Compare all categories.
-
-### Products
-
-- Which product sells the most?
-- Which product generates the highest profit?
-- Show me the top products.
-
-### Trends
-
-- Show me the monthly sales trend.
-- Which month had the highest sales?
-- Explain the sales trend.
-
-### Business Analysis
-
-- Give me a complete business summary.
-- What are the most important business insights?
-- Where are the biggest sales differences?
-- What areas have high sales but low profit?
-"""
-        )
-
-
-    # --------------------------------------------------------
-    # CLEAR CHAT
-    # --------------------------------------------------------
-
-    if st.button(
-        "🗑️ Clear Conversation"
-    ):
-
-        st.session_state.messages = []
-
-        st.rerun()
-
-
-# ============================================================
-# DATA TAB
-# ============================================================
-
-with data_tab:
-
-    st.header(
-        "📄 Sales Data"
-    )
-
-
-    st.write(
-        f"Showing **{len(filtered_df):,}** rows."
-    )
-
+with st.expander("View Filtered Sales Data"):
 
     st.dataframe(
         filtered_df,
-        use_container_width=True,
-        height=500
+        use_container_width=True
     )
 
 
-    st.divider()
+# ============================================================
+# DOWNLOAD
+# ============================================================
 
+csv_data = filtered_df.to_csv(index=False)
 
-    # --------------------------------------------------------
-    # DOWNLOAD
-    # --------------------------------------------------------
-
-    st.subheader(
-        "⬇️ Download Filtered Data"
-    )
-
-
-    csv_data = (
-        filtered_df
-        .to_csv(index=False)
-        .encode("utf-8")
-    )
-
-
-    st.download_button(
-        label="📥 Download Filtered Sales CSV",
-        data=csv_data,
-        file_name="filtered_sales.csv",
-        mime="text/csv"
-    )
+st.download_button(
+    label="⬇️ Download Filtered CSV",
+    data=csv_data,
+    file_name="filtered_sales.csv",
+    mime="text/csv"
+)
 
 
 # ============================================================
@@ -1459,11 +591,5 @@ with data_tab:
 st.divider()
 
 st.caption(
-    "AI Sales Analytics | "
-    "Python • Pandas • Plotly • Streamlit • "
-    "Ollama • Qwen3 4B"
-)
-
-st.caption(
-    "🔒 Local AI • No OpenAI API required"
+    "AI Sales Analytics • Built with Python, Pandas, Plotly and Streamlit"
 )

@@ -69,10 +69,9 @@ What is the total sales?
 Which region has the highest sales?
 Which category performs best?
 How many units were sold?
+
 👨‍💻 Author
-
 Yeswanth S
-
 MSc Data Science
 
 GitHub:
